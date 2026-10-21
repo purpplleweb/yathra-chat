@@ -242,6 +242,14 @@ admin.get('/conversations/:id/messages', wrap(async (req, res) => {
   const since = +req.query.since || 0, rows = await store.msgsSince(c.id, since);
   res.json({ messages: rows.map(m => view(m, 'seller')), cursor: rows.reduce((a, m) => Math.max(a, m.updatedAt), since) });
 }));
+admin.post('/conversations/:id/media', express.raw({ type: ['image/*', 'audio/*'], limit: MAX_MEDIA }), wrap(async (req, res) => {
+  const c = await adminConv(req, res); if (!c) return;
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return bad(res, 400, 'empty');
+  const type = (req.get('content-type') || '').split(';')[0];
+  if (!/^(image\/(webp|png|jpeg|gif)|audio\/(webm|mp4|ogg|mpeg|aac|x-m4a))$/.test(type)) return bad(res, 400, 'bad_type');
+  const id = uid(); await store.putMedia({ id, cid: c.id, type, data: req.body, at: Date.now() });
+  res.json({ url: `${req.protocol}://${req.get('host')}${req.baseUrl.replace(/\/admin$/, '')}/media/${id}` });
+}));
 admin.post('/conversations/:id/messages', wrap(async (req, res) => {
   const c = await adminConv(req, res); if (!c) return;
   const body = { ...req.body, id: (req.body && req.body.id) || uid() };
