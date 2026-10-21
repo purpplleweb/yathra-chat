@@ -159,10 +159,12 @@ async function ownConv(req, res) {
 router.post('/conversations', wrap(async (req, res) => {
   const o = await owner(req); if (!o) return bad(res, 401, 'no_identity');
   const productKey = String(req.body.productKey || '').slice(0, 500); if (!productKey) return bad(res, 400, 'productKey');
+  const name = String(req.body.name || '').replace(/\s+/g, ' ').trim().slice(0, 40);
   let c = await store.findConv(o, productKey);
+  if (c && name && c.customerName !== name) { await store.touchConv(c.id, { customerName: name }); c.customerName = name; }
   if (!c) {
     const t = store.now();
-    try { c = await store.insertConv({ id: uid(), owner: o, productKey, productName: String(req.body.productName || '').slice(0, 200), price: String(req.body.price || '').slice(0, 20), image: String(req.body.image || '').slice(0, 500), createdAt: t, updatedAt: t }); }
+    try { c = await store.insertConv({ id: uid(), owner: o, customerName: name, productKey, productName: String(req.body.productName || '').slice(0, 200), price: String(req.body.price || '').slice(0, 20), image: String(req.body.image || '').slice(0, 500), createdAt: t, updatedAt: t }); }
     catch (e) { c = await store.findConv(o, productKey); if (!c) throw e; } // unique-index race
   }
   res.json({ id: c.id });
@@ -230,7 +232,7 @@ admin.get('/conversations', wrap(async (req, res) => {
   const out = [];
   for (const c of await store.listConvs()) {
     const last = await store.lastMsg(c.id);
-    out.push({ id: c.id, productName: c.productName, productKey: c.productKey, image: c.image, price: c.price, updatedAt: c.updatedAt, unread: await store.unseen(c.id, 'user'), last: last && view(last, 'seller') });
+    out.push({ id: c.id, customerName: c.customerName || '', productName: c.productName, productKey: c.productKey, image: c.image, price: c.price, updatedAt: c.updatedAt, unread: await store.unseen(c.id, 'user'), last: last && view(last, 'seller') });
   }
   res.json({ conversations: out });
 }));
